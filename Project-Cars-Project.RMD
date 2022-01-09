@@ -1,0 +1,654 @@
+---
+title: "Project-Cars-Dataset"
+author: "Chinedu H Obetta"
+date: "8/9/2020"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##     Load Packages
+```{r}
+library(readxl)
+library(ggplot2)
+library(gridExtra)
+library(DataExplorer)
+library(mice)   # To treat missing values using k-Nearest Neighbour(KNN)
+library(caTools) # Split Data into Test and Train Set
+library(lmtest) # To confirm the validity of the logistics models
+
+```
+
+
+#    Environment Set up and Data Import
+#    Set Working Directory
+```{r}
+setwd("C:/Users/Chinedu/Documents/GREAT LEARNING-UNIVERSITY OF TEXAS/PREDICTIVE MODEL")
+original_cars_dataset <- read.csv("Cars-dataset.csv", stringsAsFactors = TRUE)
+```
+
+## Exploratory Data Analysis
+
+```{r}
+dim(original_cars_dataset)
+```
+
+*   The dataset contains 9 variables and 418 observations
+
+### Sanity Checks
+```{r}
+head(original_cars_dataset)
+tail(original_cars_dataset)
+```
+
+*   Values in all variables appears consistent.
+
+# COnfirmation of missing variables
+```{r}
+sum(is.na(original_cars_dataset))
+```
+The dataset has 1 missing value and this can neglected
+
+# Droping the missing values
+```{r}
+original_cars_dataset <- original_cars_dataset[complete.cases(original_cars_dataset),]
+
+```
+
+### Descriptive Statistics
+
+##  An Overview of the dataset
+```{r}
+str(original_cars_dataset)
+```
+
+Observations:
+* The Age is a numerical variables
+* The variable "gender' in the original dataset is classed as character; this needs to be changed to factor varibale.
+*  The uniqueness of Engineer, MBA, License and Transport shows that they should be factor variables for EDA. Thus, the type of variables should be changed.
+* The rest of the variables are in the preferred format "Numerical".
+* I observed that work experience are recorded as zero(0). This is odd is an employee is meant to have some period of experience, thus, work experience needs to be treated
+
+
+##  Treatment of factor variables and modification of transport variable to reflect of objective(To predict employees that compute to work with car)
+```{r}
+fac.names <- c(3,4,8)
+
+original_cars_dataset[, fac.names] <- lapply(original_cars_dataset[, fac.names] , factor)
+original_cars_dataset$Transport <- as.factor(ifelse(original_cars_dataset$Transport == "Car", "Car", "Others"))
+```
+
+Observations:
+*  The gender, Engineer, MBA , License  and transport are now two level facor
+* The Age variable is an integer, thus, it needs to be converted to numerical variable
+
+# Review of dataset before EDA
+```{r}
+str(original_cars_dataset)
+```
+
+
+## Univariate analysis
+```{r}
+#Distribution of the dependent variable
+prop.table(table(original_cars_dataset$Transport))*100
+ggplot(original_cars_dataset) +
+ aes(x = Transport) +
+ geom_bar(fill = "#0c4c8a") +
+ theme_minimal()
+```
+
+
+* 8.4% of the employees under review commutes to their office through car while 91.6% of the employee computes sames through other means of transport
+
+* The distribution of the dependent variables appears imbalanced, thus, the tendency   of the model to be skewed to the number of employees that commutes through           2wheelers and public transports is very likely. While the output seems imbalanced,   I am not sure if the imabalance will be significant. 
+
+* This calls for the dataset to preprocessed further to ensure accruate development    of predictive models. The model when developed will help the company to predict      employes that have very high probability to commute to their place of work through   cars instead of 2wheelers or public transport.
+
+
+```{r}
+# Function to draw histogram and boxplot of numerical variables using ggplot
+plot_histogram_n_boxplot = function(variable, variableNamestring, binw){
+  c = ggplot(data = original_cars_dataset, aes(x= variable)) +
+    labs(x = variableNamestring, y = "Count") +
+    geom_histogram(fill = "green", col = "white", binwidth = binw)+
+    geom_vline(aes(xintercept= mean(variable)),
+               color="black", linetype = "dashed", size = 0.5)
+  d = ggplot(data = original_cars_dataset, aes('', variable)) +
+    geom_boxplot(outlier.colour = 'grey', col = 'red', outlier.shape = 19)+
+    labs(x = '', y = variableNamestring) + coord_flip()
+    grid.arrange(c,d,ncol =2)
+}
+```
+
+#1. Observations on Age
+```{r}
+plot_histogram_n_boxplot(original_cars_dataset$Age, "Employee's Age", 1) 
+shapiro.test(original_cars_dataset$Age)
+ggplot(original_cars_dataset, aes(x = Transport, y =Age)) + 
+    geom_boxplot()
+ggplot(original_cars_dataset,aes_string(x=original_cars_dataset$Age,fill="Transport")) + geom_histogram(bins=50,alpha=0.5,colour='black') + labs(x = " Age of the employess ", y = "Frequency", subtitle = "The Analysis of Age")
+```
+
+Observation:
+* All the employees are within the working age as the average age of the employees is 27 years and the younggest and oldest employee is 18 years and 43 years old respectively.
+* We can see the difference in the age range of the employees that commute to work with cars and with other means of transportation.
+* Eventhough, the average age of the employees under review is 27 years, all the employee that commute to work with car are over 30 years old. We also observed that the over 80% of those that use other means of transport are below 30 years old.
+* The boxplot does show some number of  potential outliers as the difference between the mean age and the oldest person is very high. Thus, there will be need for outliers treatment.
+
+* The P-value is very low, thus, the observations of age follows normal distribution   not due to chance 
+
+
+
+#2. Observations on Work.Experience
+```{r}
+
+plot_histogram_n_boxplot(original_cars_dataset$Work.Exp, "Work.Experience", 1)
+shapiro.test(original_cars_dataset$Work.Exp)
+ggplot(original_cars_dataset, aes(x = Transport, y = Work.Exp)) + 
+    geom_boxplot()
+ggplot(original_cars_dataset,aes_string(x=original_cars_dataset$Work.Exp,fill="Transport")) + geom_histogram(bins=50,alpha=0.5,colour='black') + labs(x = " Years of work experience", y = "Frequency", subtitle = "The Analysis of Work Experience")
+```
+Observations;
+* The employee's years of work experience appears to be normally distributed and it is skewed to the left. 
+*  Nothwithstanding that the highest years of work experience is 25 years, The distribution shows that 75% of the employee's under review have less than 8 years of work experience.This indicates the presence of the outliers in the dataset.
+Most of the employees have about 5 years of work experience.
+*  The P-value is very low, thus, the distribution of the employee's years of experience follows normal distribution. 
+
+
+#3.  Observations on distance
+```{r}
+plot_histogram_n_boxplot(original_cars_dataset$Distance, "Distance from home(km)", 1)
+shapiro.test(original_cars_dataset$Distance)
+ggplot(original_cars_dataset, aes(x = Transport, y = Work.Exp)) + 
+    geom_boxplot()
+ggplot(original_cars_dataset,aes_string(x=original_cars_dataset$Distance,fill="Transport")) + geom_histogram(bins=50,alpha=0.5,colour='black') + labs(x = " Distance from home", y = "Frequency", subtitle = "The Analysis of Distance")
+```
+* The plot indicated that the distribution of distance to be normal.
+* The test statistic generated a p- value of less than 0.05  confirms the assumption about the normality of the variable.
+* Most of the employee's resides within their place of work. This is given that 75% of the all the employee's under review resides within 14kms. This could account for the reason why most 92% of them prefer to use other means of transportation instead of cars.
+* The boxplot does show very few outliers
+
+
+#4.  Observations on salary
+```{r}
+plot_histogram_n_boxplot(original_cars_dataset$Salary, "Employee's Salary", 1)
+shapiro.test(original_cars_dataset$Salary)
+ggplot(original_cars_dataset, aes(x = Transport, y = Salary)) + 
+    geom_boxplot()
+ggplot(original_cars_dataset,aes_string(x=original_cars_dataset$Salary,fill="Transport")) + geom_histogram(bins=50,alpha=0.5,colour='black') + labs(x = " Employee's Salary", y = "Frequency", subtitle = "The Analysis of Salary")
+```
+Obseravtions:
+
+* The employees' salary level seems to play a significant role in their mode of transportation. The box plot below shows that 75% of those that commute to work with car earn more than USD38,000 while majority of the customer that use other modes of transportation earn less than USD20,000.
+*  The distribution of income is rightly skewed, and fairly normally distributed and    the boxplot shows strong presence of outliers. The outliers will be treated accordingly.
+*  The employees are predimoniantly low income earnerr as 75% of them are earning less than USD15,000 per annum. Hence, it could be that most of them are not commuting with cars due to its affordability.
+*  The average salary earner for the employee is USD15,400 and the lowest salary for the team is USD6,500.00
+
+
+### Bivarite Analysis
+#Let us plot percent stacked barchart to see the effect of independent variables on the employee's prefered mode of transport.
+
+1. Mode of Transport Vs Gender
+```{r}
+ggplot(original_cars_dataset) +
+ aes(x = Gender, fill = Transport) +
+ geom_bar(position = "fill") +
+ scale_fill_hue() +
+ labs(x = "Mode of Transport ", y = "Frequency", subtitle = "Mode of Transport Vs Gender", caption = "Mode of Transport Vs Gender") +
+ theme_minimal()
+chisq.test(original_cars_dataset$Transport, original_cars_dataset$Gender)
+```
+
+Observations:
+
+*  The employee's gender seems not to influence their choice of transportation as shown on the bar.
+*  The Chi-sqared test confirms the observation as the two variables are not statistically correlated, thus, they are independent
+
+
+#2. Mode of Transport Vs Engineer
+```{r}
+ggplot(original_cars_dataset) +
+ aes(x = Engineer, fill = Transport) +
+ geom_bar(position = "fill") +
+ scale_fill_hue() +
+ labs(y = "Frequency", title = " Mode of Transport Vs Engineer", caption = " Mode of Transport Vs Engineer") +
+ coord_flip() +
+ theme_minimal()
+
+chisq.test(original_cars_dataset$Transport, original_cars_dataset$Engineer)
+```
+Observation:
+* The empoyees who are Engineers tend to commute with cars more than non-engineers. 
+* However, the Chi-sqared test confirms that two variables are not statistically correlated, thus, they are independent. This means that the distribution of the cars on the variable could be due to chances or errors
+
+
+#3. Mode of Transport Vs MBA degree
+```{r}
+ggplot(original_cars_dataset) +
+ aes(x = MBA, fill = Transport) +
+ geom_bar(position = "fill") +
+ scale_fill_hue() +
+ labs(y = "Frequency", title = " Mode of Transport Vs MBA degree", caption = " Mode of Transport Vs MBA degree") +
+ coord_flip() +
+ theme_minimal()
+chisq.test(original_cars_dataset$Transport, original_cars_dataset$MBA)
+```
+
+Observations:
+
+*  The choice of transportation does not seem to be dependent whether the employee has an MBA degree or not as shown above.
+*  The test statisitic also confirms this as p-value is more than 0.05.
+
+
+#3. Mode of Transport Vs License Status
+```{r}
+ggplot(original_cars_dataset) +
+ aes(x = license, fill = Transport) +
+ geom_bar(position = "fill") +
+ scale_fill_hue() +
+ labs(x = "License Status", y = "Frequency", subtitle = " Mode of Transport Vs License", fill = " Mode of Transportation") +
+ theme_minimal()
+chisq.test(original_cars_dataset$Transport, original_cars_dataset$license)
+```
+
+Observation:
+
+*  The barplot shows that the prospensity of an employee to commute to work with car could be influenced on whether they are licnsed to drive or not.
+*  About 40% of the employee's who have license to drive comute to work with car  while close t0 100% of those who do not have license use other means of transportation.
+* Given that p-value is very low ie p-value < 0.05, it means that the two variables are related. Thus, the employee's prospensity to use car for transportation could be influenced by his//her license status.
+
+
+
+
+
+
+
+### Correlation Plot between numeric variables in the dataset
+
+Determine Numeric variables in data
+```{r}
+# Numeric variables in the data
+numeric_var = sapply(original_cars_dataset, is.numeric)
+```
+
+# Correlation Plot
+```{r}
+plot_correlation(original_cars_dataset[, numeric_var])
+```
+
+Observation:
+
+*  The dataset contains 4 numerical variables and these include Age, Salary, Work Experience and Distance.
+*  There is a strong correlation between Age and Work Experince, Age And Salary. The strong correlation between Age and years of work Experience is not odd as the older the employee get the more years of experience he/she will acquire. 
+*  These strong correlation amongst the potential predictors  will be an issue for some of the predictive model under consideration for this project such as Naive Bayes. 
+*  Surprisingly, the distance between where the employee resides and their place of work does is not correlated with any of the numerical variables. Therefore, it may not be easy to understand the effect of the variable on the project.
+* It is important to note that the Tree based models are not influenced by the correlation in the independent variables.
+* The treatment of outliers will no longer be required as Tree based model can  deal with it.
+
+#*********Data Preparation******************
+
+
+# Treatment of outliers-original_cars_dataset
+Outliers can have a siginifcant effect on most of the models, thus, there is need for the identified outliers in most of the numerical variables to be treated before models are built. The identified outliers in the following numerical variables will be treated.
+1. Age
+2. Work Experience
+3. Salary
+4. Distance
+
+#1. Treatment of outlier in Age
+```{r}
+quantile(original_cars_dataset$Age,c(0.01,0.02,0.03,0.1,0.2,0.3,0.4,0.50,0.6,0.7,0.8,0.9,0.95,0.99,1)) 
+```
+
+* Capping data at 99% to treat the outliers
+```{r}
+original_cars_dataset$Age[which(original_cars_dataset$Age>40)] <- 40 
+```
+
+#2. Treatment of outlier in Work Experience
+```{r}
+quantile(original_cars_dataset$Work.Exp,c(0.01,0.02,0.03,0.1,0.2,0.3,0.4,0.50,0.6,0.7,0.8,0.9,0.95,0.99,1))
+boxplot(original_cars_dataset$Work.Exp)
+```
+
+* Capping data at 90% to treat the outliers in Work Experience
+```{r}
+original_cars_dataset$Work.Exp[which(original_cars_dataset$Work.Exp>15)] <- 15 
+```
+
+#3. Treatment of outlier in Salary
+```{r}
+quantile(original_cars_dataset$Salary,c(0.01,0.02,0.03,0.1,0.2,0.3,0.4,0.50,0.6,0.7,0.8,0.9,0.95,0.99,1))
+```
+
+* Capping data at 80% to treat the outliers in salary
+```{r}
+original_cars_dataset$Salary[which(original_cars_dataset$Salary> 21)] <- 21 
+```
+
+#4. Treatment of outlier in Distance
+```{r}
+quantile(original_cars_dataset$Distance,c(0.01,0.02,0.03,0.1,0.2,0.3,0.4,0.50,0.6,0.7,0.8,0.9,0.95,0.99,1))
+```
+
+* Capping data at 99% to treat the outliers in Distance
+```{r}
+original_cars_dataset$Salary[which(original_cars_dataset$Salary> 21.4)] <- 21.4 
+```
+
+
+
+#3.  Scaling of the variables, however, all the variables must be converted to numeric
+
+```{r}
+wholedata <- original_cars_dataset
+wholedata$Age <- as.numeric(wholedata$Age)
+wholedata$Gender <- as.numeric(wholedata$Gender)
+wholedata$Engineer <- as.numeric(wholedata$Engineer)
+wholedata$MBA <- as.numeric(wholedata$MBA)
+wholedata$Salary <- as.numeric(wholedata$Salary)
+wholedata$Distance <- as.numeric(wholedata$Distance)
+wholedata$license <- as.numeric(wholedata$license)
+wholedata$Transport <- as.numeric(as.factor(wholedata$Transport))
+
+C_wholeData.scaled <- scale(wholedata) # Scaling the data
+C_wholeData.scaled <- as.data.frame(C_wholeData.scaled)
+table(wholedata$MBA)
+
+```
+
+# COnfirmation if the dataset has been scaled using the variable "Age"
+```{r}
+mean(C_wholeData.scaled$Age)   # Mean is almost zero
+sd(C_wholeData.scaled$Age)  # SD is 1, Thus, the scaling was effective
+```
+
+
+# Conversion of categorical variable to numerical variable using dummy code. This is required for KNN, and Nayes Bayes model
+```{r}
+original_cars_dataset$Gender <- ifelse(original_cars_dataset$Gender == "Male", 1, 0)
+original_cars_dataset$Engineer <- ifelse(original_cars_dataset$Engineer == "1", 1, 0)
+original_cars_dataset$license<-ifelse(original_cars_dataset$license == "1", 1, 0)
+original_cars_dataset$MBA<-ifelse(original_cars_dataset$MBA== "1", 1, 0)
+original_cars_dataset$Work.Exp<- as.numeric(original_cars_dataset$Work.Exp)
+
+str(original_cars_dataset)
+```
+
+
+
+
+
+
+
+*********### Building A KNN mode*******
+
+## Creation of training and testing dataset
+```{r}
+sample <- sample.split(original_cars_dataset$Transport, SplitRatio = 0.7)
+c_train <- subset(original_cars_dataset, sample == TRUE)
+c_test <- subset(original_cars_dataset, sample == FALSE)
+```
+
+
+
+# Check that the distribution of the dependent variable is same for both train and test datasets
+```{r}
+prop.table(table(original_cars_dataset$Transport))
+prop.table(table(c_train$Transport))
+prop.table(table(c_test$Transport))
+```
+ * The distribution of the dataset between the training and testing set are same and in line with the dataset.
+
+
+************************PART THREE****************
+
+
+
+#1. KNN model
+```{r}
+set.seed(1)
+
+control <- caret::trainControl(method = "cv", number = 5, sampling = "up") 
+model_knn <- caret::train(Transport ~ .,
+                       method     = "knn",
+                       tuneGrid   = expand.grid(k = 2:21),
+                       metric     = "Accuracy",
+                       preProcess = c("scale"),
+                       data       = c_train,
+                       trControl = control)
+
+```
+
+Observation:
+* The caret library enabled us to obtain  the best K value or the number of nearest neighbor value which should be used to get the maximum accuracy on the model. The number of k is 2.
+
+
+
+#building knn using class library. The value of k to be used is 2.
+```{r}
+model_knn1= class::knn(scale(c_train[,-9]), scale(c_test[-9]),c_train$Transport,k=2)
+
+```
+
+
+#Making a prediction using KNN Model
+```{r}
+pred_knn <-caret::confusionMatrix(c_test$Transport, model_knn1 )
+pred_knn
+```
+
+#### KNN model metrics :
+
+* The  model only misclassified only two observations. The prediction accuracy of the model is high and acceptable.
+* The senistivity for the model is 1, this shows the model's ability to correctly predicts employees who compute to work with car
+* Accuracy : 0.98
+
+* Sensitivity : 1          
+
+* Specificity : 0.98
+
+* Sensitivity is an important metric in our case because we are dealing with a medical data and our model should be able to detect the malignant tumors.
+
+
+* From the above metrics we can conclude that KNN is performing very well on the test data and is able to differentiate between employee that commute with Car and other modes of transportation.
+
+
+
+
+
+
+
+************Naive Bayes Model************
+
+
+```{r}
+model_nb <- train(Transport ~ ., data = c_train,
+                 method = "naive_bayes",
+                 trControl = control)
+
+summary(model_nb)
+```
+
+# Predict using the trained model & check performance on test set
+```{r}
+pred_nb <- predict(model_nb, newdata = c_test, type = "raw")
+
+caret::confusionMatrix(pred_nb,reference=c_test$Transport,positive="Car")
+```
+
+Observations:
+
+* The accuracy at 98% indciates that the model is able to clearly differentiate between the employess' mode of transportation.
+* Being able to classify 100% of the class of interest could be an indicator that the model fits noise. Recall, we are yet to test some of the basic assumption of Naive Bayes such as multicollinearity and the assumption that all the independent variables are not related
+
+
+ 
+### perform the chi sq test to confirm the extent of the relationships between each independent variables with the dependent variable.
+### perform the chi sq test to com
+```{r}
+chisq.test(original_cars_dataset$Transport, original_cars_dataset$Gender)
+chisq.test(original_cars_dataset$Transport, original_cars_dataset$Engineer)
+chisq.test(original_cars_dataset$Transport, original_cars_dataset$MBA)
+chisq.test(original_cars_dataset$Transport, original_cars_dataset$license)
+```
+Observation;
+*  The independent variables(Gender, Engineer, and MBA) do not have any significant relationships with the dependent variables, thus, these variable will be dropped for Logistics Regressions and Naive Bayes. 
+* The variable 'license and the dependent variable are statistically related, this, the variable will be used in building the models.
+
+
+## Test of c
+
+
+
+```{r}
+highcorcar <- findCorrelation(cor(original_cars_dataset[, c(-2,-3, -4, -8, -9)]), cutoff = 0.5,)
+
+#filtering the data or removing the highly correlated columns
+cfilter_cor_data <- original_cars_dataset[, -highcorcar]
+```
+ 
+#based on the correlation above, salary and work experience are to dropped from the dataset
+
+```{r}
+original_cars_dataset$Work.Exp <- NULL
+original_cars_dataset$Salary <- NULL
+original_cars_dataset$Gender<-NULL
+original_cars_dataset$Engineer <- NULL
+original_cars_dataset$MBA <- NULL
+original_cars_dataset$license <- NULL
+```
+
+
+
+
+
+
+
+
+
+**************LOGISTIC REGRESSION***************
+
+### Building a logistic regression mode
+```{r}
+logmodel <- caret::train(Transport ~ .,
+                       method     = "glm",
+                       metric     = "Sensitivity",
+                       data       = c_train)
+summary(logmodel)
+```
+
+##### predicting on test data set
+```{r}
+logpred<-predict(logmodel,newdata=c_test)
+caret::confusionMatrix(logpred,reference=c_test$Transport,positive="Car")
+```
+
+
+
+##### Alternative to Logistic
+```{r}
+model_log <- glm(Transport~., data = c_train[, ], family = binomial)
+model_log
+summary(model_log)
+```
+
+Observations:
+
+* All the variables
+***   This generated an AIC of 33.33 and the VIF of AGE, Work.Exp and Salary are over 10. This is shows the presence of multicollinearity. 
+***   When the years of work-experience is dropped for the model, the AIC reduced marginally to 32.11(better model). In addition, all the remanining variables generated a VIF of less than 4, thus, the issue of multicollinearity is no longer significant
+***  The summary of the model shows that Age, license and Distance are the most siginificant in the model's predictable capacity. Thus, other factors not siginificant can be dropped
+**** To automatically address the issue of multicollinearity, stepwise model is built
+
+```{r}
+vif(model_log)
+```
+
+*
+```{r}
+library(blorr)
+step_log_model <- blr_step_aic_both(model_log)
+summary(step_log_model$model)
+```
+Observation
+* The AIC of 27.6 is lower and better than the previous one(AIC of 35). The issue of multicollinearity has been handled.
+* Out of the 8 independent variables that were used to build the model, only 5 variables (work.exp, DIstance , MBA, Gender and license were used for the prediction).
+* The variable significant for the models are Work. Exp, DIstance, License, Gender and MBA as listed below
+
+##### Checking the Variable importance
+```{r}
+caret::varImp(step_log_model$model)
+
+```
+
+# using the model(step_log_model) for prediction on test data
+```{r}
+pred_log <- predict(step_log_model$model, newdata = c_test)
+
+table(c_test$Transport, ifelse(pred_log > 0.5, "Others", "Car"))
+
+```
+
+
+
+### Validation of logistics models using #lmtest
+```{r}
+lrtest(model_log)
+blr_rsq_mcfadden(step_log_model$model)
+```
+
+Observation;
+
+* The validation of the models build under logistics algrothims shows that the P value is less than 0.05. 
+* This means that at least of the coefficient is greater then zero.
+* In summary, logistic model is a valid and appropriate model for the classification of prediction
+* Using MCfadden, the R square was determined to be 88% and this confirms my earlier position that logistic model is a valid one for the classification problem.
+* Looking at the accuracy from the confusion matrix, the model was able to classify 98% of the test correctly and this further confirms the suitability of the model.
+
+
+#### Generating a tabular output for comparisoms
+```{r echo=FALSE}
+Name = c( "KNN","Naive_Bayes", "Logistic_Regression")
+Accuracy = c(0.98,0.98,0.98)
+Sensitivity=c(1.0,1,0.90)
+Specificity=c(0.97,0.97,0.99)
+output = data.frame(Name,Accuracy,Sensitivity,Specificity)
+output
+```
+### Conclusion 
+
+* KNN with highest accuracy and sensitivity is performing best on our data with nearest neighbors(K) equal to 2.
+
+* Top 5 important features according to Logistic regression are : Work.Exp, Distance, License, Gender and MBA
+	
+
+
+**********************************Part 4***************************************
+
+
+#*******************************Random Forest*********************************
+```{r}
+model_rf <- train(Transport~ ., data = c_train,
+                     method = "rf",
+                     ntree = 30,
+                     maxdepth = 5,
+                     tuneLength = 10,
+                     trControl = control)
+```
+
+# Predict using the trained model & check performance on test set
+```{r}
+pred_rf <- predict(model_rf, newdata = c_test, type = "raw")
+confusionMatrix(pred_rf, c_test$Transport)
+```
+
+
+
+
+
