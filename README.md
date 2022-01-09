@@ -1,0 +1,2 @@
+# Cars-Case-Study-Predictive-Modelling
+The objective of the data is to predict whether or not an employee will commute to their offices with car or other modes of transportation based on employee’s personal and professional details like age, salary, work experience and as well as information about their current mode of transportation. In addition, we will also review the list of factors that plays significant roles in the predicting whether an employee will commute with cars or not. 
